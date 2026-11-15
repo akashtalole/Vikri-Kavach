@@ -226,3 +226,6 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 *.tsbuildinfo
+
+# MkDocs build output
+site/

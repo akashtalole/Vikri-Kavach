@@ -1,0 +1,83 @@
+site_name: Vikri Kavach
+site_description: Sale shield for APMC farmers in Maharashtra. Checks every sale for weight, rate, deduction and payment fraud.
+site_url: https://akashtalole.github.io/Vikri-Kavach/
+repo_url: https://github.com/akashtalole/Vikri-Kavach
+repo_name: akashtalole/Vikri-Kavach
+edit_uri: edit/main/docs/
+copyright: MIT licensed · Built for the Seva First Innovation Challenge (Agriculture)
+theme:
+  name: material
+  language: en
+  logo: assets/shield.svg
+  favicon: assets/shield.svg
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      accent: amber
+      toggle: { icon: material/weather-night, name: Switch to dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      accent: amber
+      toggle: { icon: material/weather-sunny, name: Switch to light mode }
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.highlight
+    - search.suggest
+    - toc.follow
+    - content.code.copy
+    - content.tabs.link
+nav:
+  - Home: index.md
+  - Product:
+      - How it works: product/how-it-works.md
+      - Fraud checks: product/checks.md
+      - Screens: product/screens.md
+  - Deploy:
+      - deploy/index.md
+      - AWS CloudShell (one command): deploy/cloudshell.md
+      - Operating the service: deploy/operations.md
+      - Going live checklist: deploy/go-live.md
+      - Run locally: deploy/local.md
+  - Reference:
+      - Architecture: reference/architecture.md
+      - Configuration: reference/configuration.md
+      - HTTP API: reference/api.md
+      - Command line: reference/cli.md
+      - Security and privacy: reference/security.md
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - def_list
+  - pymdownx.details
+  - pymdownx.highlight: { anchor_linenums: true }
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed: { alternate_style: true }
+  - pymdownx.tasklist: { custom_checkbox: true }
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - toc: { permalink: true }
+plugins:
+  - search
+validation:
+  links:
+    not_found: warn
+    unrecognized_links: warn
+extra_css:
+  - assets/extra.css

@@ -1,5 +1,7 @@
 # Vikri Kavach (विक्री कवच): sale shield for APMC farmers
 
+📖 **Documentation:** https://akashtalole.github.io/Vikri-Kavach/
+
 **Track:** Agriculture. Farmer income protection, market access and digital crop-loss assessment.
 
 At an APMC (agricultural market yard), a farmer can lose money after the auction in five common ways:
