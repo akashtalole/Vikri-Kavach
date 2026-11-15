@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/var
+**/__pycache__
+**/.pytest_cache
+**/*.egg-info
+.git
+site
+docs
+krishisetu
+davamitra
+submission
