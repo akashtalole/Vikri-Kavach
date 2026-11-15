@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_DB: vk, POSTGRES_USER: vk, POSTGRES_PASSWORD: vk }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U vk" --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install "./bhavsetu[dev]" "./backend[dev]"
+      - name: App tests
+        working-directory: backend
+        run: pytest -q
+      - name: Market-data package tests
+        run: pytest -q bhavsetu/tests
+      - name: Smoke test on PostgreSQL
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://vk:vk@localhost:5432/vk
+          STAFF_PASSWORD: ci-officer-password
+        run: |
+          vikrikavach seed-demo --apmc-code 02190400
+          vikrikavach seed-demo --apmc-code 02190400
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - run: npm ci
+      - run: npm run build
+
+  cloudshell-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck -x -S warning cloudshell/*.sh
+
+  image:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t vikrikavach:ci .
+      - name: Container answers its health check
+        run: |
+          docker run -d --name vk -p 8080:8080 -e DATABASE_URL=sqlite:////tmp/vk.db vikrikavach:ci
+          for i in $(seq 1 30); do curl -sf localhost:8080/api/health && exit 0; sleep 1; done
+          docker logs vk; exit 1

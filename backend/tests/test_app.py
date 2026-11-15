@@ -263,3 +263,30 @@ def test_seed_demo_is_idempotent(tmp_path, monkeypatch):
     monkeypatch.setenv("STAFF_PASSWORD", "demo-officer-pass")
     assert main(["seed-demo", "--apmc-code", APMC]) == 0
     assert main(["seed-demo", "--apmc-code", APMC]) == 0
+
+
+def test_create_staff_with_hash_and_reset(tmp_path, monkeypatch, capsys):
+    from app.cli import main
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/c.db")
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO("first-password-1\n"))
+    assert main(["hash-password", "--stdin"]) == 0
+    h = capsys.readouterr().out.strip()
+    assert main(["create-staff", "--username", "Sec1", "--apmc-code", APMC, "--password-hash", h]) == 0
+    assert main(["create-staff", "--username", "sec1", "--apmc-code", APMC, "--password-hash", "nope"]) == 1
+    monkeypatch.setenv("STAFF_PASSWORD", "second-password-2")
+    assert main(["create-staff", "--username", "sec1", "--apmc-code", APMC]) == 0  # resets, no duplicate
+    settings = replace(load(), database_url=f"sqlite:///{tmp_path}/c.db")
+    client = TestClient(create_app(settings, today=lambda: TODAY))
+    assert client.post("/api/auth/staff/login", json={"username": "sec1", "password": "second-password-2"},
+                       headers=H).status_code == 200
+
+
+def test_import_traders_csv(tmp_path, monkeypatch, capsys):
+    from app.cli import main
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/i.db")
+    csv_file = tmp_path / "reg.csv"
+    csv_file.write_text("licence_no,name,firm,status\nA-1,Alpha,Alpha Co,active\nB-2,Beta,,Suspended\nC-3,Gamma,,unknown\n")
+    assert main(["import-traders", "--apmc-code", APMC, str(csv_file)]) == 0
+    assert '"imported": 2' in capsys.readouterr().out
