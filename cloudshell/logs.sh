@@ -7,7 +7,7 @@ while [ $# -gt 0 ]; do
   case "$1" in --since) SINCE=$2; shift 2 ;; --no-follow) FOLLOW=""; shift ;; *) die "unknown option $1" ;; esac
 done
 SVC=$(service_arn); [ -n "$SVC" ] || die "no deployed service named $APP in $REGION"
-TD=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SVC" --query 'services[0].taskDefinition' --output text)
+TD=$(service_task_def "$SVC")
 GROUP=$(aws ecs describe-task-definition --task-definition "$TD" \
   --query 'taskDefinition.containerDefinitions[0].logConfiguration.options."awslogs-group"' --output text)
 [ "$GROUP" != None ] || die "the service has no CloudWatch log group configured"
