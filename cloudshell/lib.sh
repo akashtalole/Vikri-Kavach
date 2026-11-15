@@ -21,7 +21,7 @@ TASK_ROLE=$APP-task-role
 BUILD_ROLE=$APP-codebuild-role
 BUILD_PROJECT=$APP-image-build
 
-if [ -t 1 ]; then B=$'\e[1m'; G=$'\e[32m'; Y=$'\e[33m'; R=$'\e[31m'; N=$'\e[0m'; else B= G= Y= R= N=; fi
+if [ -t 1 ]; then B=$'\e[1m'; G=$'\e[32m'; Y=$'\e[33m'; R=$'\e[31m'; N=$'\e[0m'; else B='' G='' Y='' R='' N=''; fi
 step() { printf '\n%s==> %s%s\n' "$B" "$*" "$N"; }
 ok()   { printf '%s  ✓ %s%s\n' "$G" "$*" "$N"; }
 warn() { printf '%s  ! %s%s\n' "$Y" "$*" "$N" >&2; }
@@ -66,3 +66,50 @@ get_secret() {
   aws secretsmanager get-secret-value --secret-id "$APP/$1" --query SecretString --output text 2>/dev/null || true
 }
 https_url() { case "$1" in http*) echo "$1" ;; "") ;; *) echo "https://$1" ;; esac; }
+
+# Express Mode services keep their task definition and network on the active configuration / service revision,
+# not on the classic top-level service fields. These helpers try each place in turn.
+service_task_def() {  # SERVICE_ARN -> task definition ARN
+  local arn=$1 td rev
+  td=$(aws ecs describe-express-gateway-service --service-arn "$arn" \
+        --query 'service.activeConfigurations[0].taskDefinitionArn' --output text 2>/dev/null || true)
+  if [ -z "$td" ] || [ "$td" = None ]; then
+    rev=$(service_revision "$arn")
+    [ -n "$rev" ] && td=$(jq -r '.taskDefinition // empty' <<<"$rev")
+  fi
+  if [ -z "$td" ] || [ "$td" = None ]; then
+    td=$(aws ecs describe-services --cluster "$CLUSTER" --services "$arn" \
+          --query 'services[0].[taskDefinition, deployments[0].taskDefinition] | [?@ != null] | [0]' --output text 2>/dev/null || true)
+  fi
+  [ -n "$td" ] && [ "$td" != None ] || die "could not find the service's task definition (is the first deployment still in progress? see ./cloudshell/status.sh)"
+  echo "$td"
+}
+service_revision() {  # SERVICE_ARN -> JSON of the active service revision, or nothing
+  local rarn
+  rarn=$(aws ecs describe-express-gateway-service --service-arn "$1" \
+          --query 'service.activeConfigurations[0].serviceRevisionArn' --output text 2>/dev/null || true)
+  [ -n "$rarn" ] && [ "$rarn" != None ] || return 0
+  aws ecs describe-service-revisions --service-revision-arns "$rarn" --query 'serviceRevisions[0]' 2>/dev/null || true
+}
+service_network() {  # SERVICE_ARN -> run-task --network-configuration JSON
+  local arn=$1 net rev
+  rev=$(service_revision "$arn")
+  [ -n "$rev" ] && net=$(jq -c '.networkConfiguration // empty' <<<"$rev")
+  if [ -z "${net:-}" ] || [ "$net" = null ]; then
+    net=$(aws ecs describe-services --cluster "$CLUSTER" --services "$arn" --query 'services[0].networkConfiguration' 2>/dev/null || true)
+  fi
+  if [ -z "${net:-}" ] || [ "$net" = null ]; then
+    net=$(aws ecs describe-express-gateway-service --service-arn "$arn" \
+          --query 'service.activeConfigurations[0].networkConfiguration' 2>/dev/null || true)
+    [ -n "$net" ] && [ "$net" != null ] && net=$(jq -c '{awsvpcConfiguration: {subnets: .subnets, securityGroups: .securityGroups, assignPublicIp: "ENABLED"}}' <<<"$net")
+  fi
+  if [ -z "${net:-}" ] || [ "$net" = null ] || [ "$(jq '.awsvpcConfiguration.subnets // [] | length' <<<"$net")" = 0 ]; then
+    # last resort: the default VPC's subnets with the default security group
+    local vpc subnets sg
+    vpc=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text)
+    subnets=$(aws ec2 describe-subnets --filters Name=vpc-id,Values="$vpc" Name=default-for-az,Values=true --query 'Subnets[].SubnetId')
+    sg=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values="$vpc" Name=group-name,Values=default --query 'SecurityGroups[0].GroupId' --output text)
+    net=$(jq -cn --argjson s "$subnets" --arg g "$sg" '{awsvpcConfiguration: {subnets: $s, securityGroups: [$g], assignPublicIp: "ENABLED"}}')
+  fi
+  echo "$net"
+}

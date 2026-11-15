@@ -31,10 +31,9 @@ account_setup
 SVC=$(service_arn); [ -n "$SVC" ] || die "no deployed service named $APP in $REGION. Run ./cloudshell/deploy.sh first."
 
 run_task() {  # args: the vikrikavach CLI command line
-  local desc td net container overrides task group prefix code
-  desc=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SVC" --query 'services[0]')
-  td=$(jq -r .taskDefinition <<<"$desc")
-  net=$(jq -c '.networkConfiguration' <<<"$desc")
+  local td net container overrides task group prefix code
+  td=$(service_task_def "$SVC")
+  net=$(service_network "$SVC")
   container=$(aws ecs describe-task-definition --task-definition "$td" --query 'taskDefinition.containerDefinitions[0]')
   overrides=$(printf '%s\0' vikrikavach "$@" | jq -Rs --arg n "$(jq -r .name <<<"$container")" \
     '{containerOverrides:[{name:$n,command:(split("\u0000")[:-1])}]}')
