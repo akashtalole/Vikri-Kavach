@@ -1,0 +1,9 @@
+.vk-hero { padding: 1.2rem 0 0.4rem; }
+.vk-hero h1 { margin-bottom: 0.3rem; }
+.vk-hero .vk-tag { font-size: 1.15rem; color: var(--md-default-fg-color--light); margin-top: 0; }
+.vk-shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; align-items: start; }
+.vk-shots figure { margin: 0; }
+.vk-shots img { border-radius: 10px; box-shadow: 0 1px 6px rgba(0,0,0,.15); }
+.vk-shots figcaption { font-size: .75rem; color: var(--md-default-fg-color--light); }
+.md-typeset .grid.cards > ul > li { border-radius: 12px; }
+.vk-preview img { height: 340px; width: 100%; object-fit: cover; object-position: top; }
