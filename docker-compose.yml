@@ -1,5 +1,5 @@
 # Local stack: Postgres + the app at http://localhost:8080
-# Run from this folder:  docker compose up --build
+# Run from the repository root:  docker compose up --build
 services:
   db:
     image: postgres:17-alpine
@@ -13,7 +13,7 @@ services:
       interval: 5s
       retries: 10
   app:
-    build: { context: .., dockerfile: vikrikavach/Dockerfile }
+    build: { context: . }
     ports: ["8080:8080"]
     depends_on: { db: { condition: service_healthy } }
     environment:

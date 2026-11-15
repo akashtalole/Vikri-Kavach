@@ -1,19 +1,19 @@
 # Vikri Kavach: one container serves the React app and the API on port 8080.
-# Build from the repository root (it needs the shared bhavsetu package):
-#   docker build -f vikrikavach/Dockerfile -t vikrikavach .
+# Build from the repository root:
+#   docker build -t vikrikavach .
 
-FROM node:22-alpine AS web
+FROM public.ecr.aws/docker/library/node:22-alpine AS web
 WORKDIR /web
-COPY vikrikavach/frontend/package.json vikrikavach/frontend/package-lock.json ./
+COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
-COPY vikrikavach/frontend/ ./
+COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.12-slim AS runtime
+FROM public.ecr.aws/docker/library/python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /srv
 COPY bhavsetu/ /src/bhavsetu/
-COPY vikrikavach/backend/ /srv/
+COPY backend/ /srv/
 RUN pip install /src/bhavsetu /srv && rm -rf /src
 COPY --from=web /web/dist /srv/static
 RUN useradd --system --uid 10001 --home /srv app && mkdir -p /srv/var && chown -R app /srv/var

@@ -48,7 +48,7 @@ One container on port 8080 (gunicorn + uvicorn workers)
    ├─ FastAPI API (/api/*)  ── PostgreSQL (Amazon RDS)
    ├─ React app (static)     ── S3: evidence photos (private, SSE)
    └─ daily jobs thread      ── Amazon SNS: OTP SMS
-         ├─ MSAMB prices for 22 crops (live msamb.com data, via the shared bhavsetu package)
+         ├─ MSAMB prices for 22 crops (live msamb.com data, via the vendored bhavsetu package)
          └─ overdue payments → notifications
 ```
 
@@ -58,76 +58,105 @@ One container on port 8080 (gunicorn + uvicorn workers)
 - **Uploads.** Type is checked by magic bytes (JPG, PNG, WebP, PDF), up to 10 MB.
 - **Audit.** Every write is logged to an audit table.
 
+## Deploy to AWS from CloudShell (one command)
+
+1. Sign in to the AWS console, choose a region (for example **Asia Pacific (Mumbai) ap-south-1**), and open **CloudShell** (the `>_` icon in the top bar).
+2. Run:
+
+```bash
+git clone https://github.com/akashtalole/Vikri-Kavach.git && cd Vikri-Kavach
+```
+
+```bash
+./cloudshell/deploy.sh --demo-apmc 02190400
+```
+
+The deployment takes about 15–20 minutes, most of it waiting for the database. At the end it prints the app's `https://` URL. The script creates or reuses everything the app needs:
+
+| Step | AWS resource |
+|---|---|
+| Database | RDS PostgreSQL `db.t4g.micro`: private, encrypted, 7-day backups, deletion protection |
+| Evidence | S3 bucket: private, encrypted, versioned |
+| Image | Built by Docker in CloudShell, or by AWS CodeBuild when CloudShell can't; pushed to ECR (last 10 kept) |
+| Secrets | Secrets Manager: `JWT_SECRET`, `DATABASE_URL`, and the optional Anthropic key and demo password |
+| Permissions | Execution role (reads only this app's secrets); task role (this bucket and SNS SMS only); Express infrastructure role |
+| App | **ECS Express Mode** service: Fargate with 1 vCPU / 2 GB, HTTPS load balancer, health check `/api/health`, 1–4 tasks on CPU, CloudWatch logs |
+
+Run it again after `git pull` to roll out a new version. The database, secrets and evidence are kept.
+
+| Option | Meaning |
+|---|---|
+| `--demo-apmc CODE` | Demo officer `demo-officer` plus a sample register for that APMC. The script prints how to read the password. |
+| `--otp sns` / `--otp dev` | Send login codes by SMS, or show them on screen (demos only). If the account's SNS SMS is still in the sandbox, the script warns you and offers `dev`. |
+| `--ai-key` | Prompts for an Anthropic API key and turns on AI slip reading |
+| `--build docker` / `--build codebuild` | Where to build the image (default: Docker if available) |
+| `--database-url URL` | Use an existing PostgreSQL instead of creating RDS |
+| `--region REGION`, `--db-class CLASS`, `--yes` | Region, RDS size, no questions |
+
+### Operating it
+
+The database is private, so admin commands run as one-off tasks inside the VPC. A staff password is hashed in CloudShell and never sent in plain text.
+
+```bash
+./cloudshell/admin.sh apmc-codes nashik
+```
+
+```bash
+./cloudshell/admin.sh create-staff --username lasalgaon-secretary --apmc-code 02190400 --name "APMC Secretary"
+```
+
+```bash
+./cloudshell/admin.sh import-traders --apmc-code 02190400 register.csv
+```
+
+```bash
+./cloudshell/status.sh
+```
+
+```bash
+./cloudshell/logs.sh
+```
+
+```bash
+./cloudshell/destroy.sh
+```
+
+- `apmc-codes` finds an APMC's code.
+- `create-staff` creates an officer account, or resets an existing one's password.
+- `import-traders` loads the official licence register from a CSV with the columns `licence_no,name,firm,status`.
+- `status.sh` shows the URL, health, tasks, database and recent events.
+- `logs.sh` follows the CloudWatch logs.
+- `destroy.sh` removes everything. It keeps a final database snapshot. The evidence bucket is deleted only with `--delete-evidence`.
+
+**Before real farmers use it:** move SNS SMS out of the sandbox, and for India complete DLT sender registration. Then deploy with `--otp sns`. Real APMCs load their own licence register and should not use `--demo-apmc`.
+
+**Costs** come mainly from the RDS instance, one always-on Fargate task, and the load balancer. Run `./cloudshell/destroy.sh` after a demo.
+
 ## Run locally
 
 With Docker (Postgres + app at http://localhost:8080; demo officer `demo-officer` / `demo-officer-pass`):
 
 ```bash
-cd vikrikavach && docker compose up --build
+docker compose up --build
 ```
 
 Without Docker:
 
 ```bash
-pip install ./bhavsetu "./vikrikavach/backend[dev]"
+pip install "./bhavsetu" "./backend[dev]"
 ```
 
 ```bash
-cd vikrikavach/frontend && npm ci && npm run build
+cd frontend && npm ci && npm run build
 ```
 
 ```bash
-cd vikrikavach/backend && STATIC_DIR=../frontend/dist uvicorn app.main:build --factory --port 8080
+cd backend && STATIC_DIR=../frontend/dist uvicorn app.main:build --factory --port 8080
 ```
 
 In dev mode (`OTP_MODE=dev`) the OTP is shown on screen. For frontend work, run `npm run dev` (it proxies `/api` to port 8080).
 
-Tests: `cd vikrikavach/backend && pytest -q` (13 tests: auth, checks, payments, complaints, officer scope, uploads, jobs).
-
-## Deploy to Amazon ECS Express Mode
-
-ECS Express Mode turns one container image into a running Fargate service: an HTTPS load balancer, auto scaling, logs and a public URL, all from a single command. [`deploy/deploy.sh`](deploy/deploy.sh) does everything around it:
-
-1. Builds the image and pushes it to ECR.
-2. Creates a private, encrypted S3 bucket for evidence.
-3. Stores `JWT_SECRET`, `DATABASE_URL` and the optional keys in Secrets Manager.
-4. Creates the roles:
-   - `ecsTaskExecutionRole`, allowed to read those secrets.
-   - `ecsInfrastructureRoleForExpressServices`.
-   - A task role allowed S3 read/write on the bucket and SNS publish.
-5. Runs `create-express-gateway-service`, or `update-express-gateway-service` on later runs. It uses health check `/api/health`, 1 vCPU / 2 GB, and scales from 1 to 4 tasks on CPU.
-
-You need an RDS PostgreSQL database reachable from the default VPC first. Then run:
-
-```bash
-export AWS_REGION=ap-south-1
-```
-
-```bash
-export DATABASE_URL='postgresql://USER:PASSWORD@your-db.xxxx.ap-south-1.rds.amazonaws.com:5432/vikrikavach'
-```
-
-```bash
-export ANTHROPIC_API_KEY=...        # optional: AI slip reading
-```
-
-```bash
-export DEMO_APMC_CODE=02190400 STAFF_PASSWORD='choose-a-strong-one'   # optional: demo officer for Lasalgaon
-```
-
-```bash
-vikrikavach/deploy/deploy.sh
-```
-
-The script prints the service's `https://…` URL. For real APMCs, create officer accounts and load the official licence register:
-
-```bash
-vikrikavach create-staff --username lasalgaon-secretary --apmc-code 02190400
-```
-
-```bash
-vikrikavach import-traders --apmc-code 02190400 register.csv   # licence_no,name,firm,status
-```
+Tests: `cd backend && pytest -q` (15 tests) and `pytest -q bhavsetu/tests` (10 tests).
 
 ### Configuration
 

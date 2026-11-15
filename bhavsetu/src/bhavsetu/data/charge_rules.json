@@ -1,0 +1,14 @@
+{
+  "_note": "Rules used by the patti audit. Fill each value from the APMC Act, rules and the market's bye-laws, and cite the source. null means not configured: no check is made. Arithmetic checks always run.",
+  "deductions": {
+    "commission": {"charged_to_farmer": null, "max_pct_of_gross": null, "source": ""},
+    "hamali": {"charged_to_farmer": null, "max_per_qtl": null, "source": ""},
+    "weighing": {"charged_to_farmer": null, "max_per_qtl": null, "source": ""},
+    "market_fee": {"charged_to_farmer": null, "max_pct_of_gross": null, "source": ""},
+    "transport": {"charged_to_farmer": null, "source": ""},
+    "advance_recovery": {"charged_to_farmer": null, "source": ""},
+    "other": {"charged_to_farmer": null, "source": ""}
+  },
+  "flag_cash_payment": true,
+  "flag_total_deductions_pct": 10
+}
